@@ -1,0 +1,2 @@
+string anchorID
+geometry_msgs/Point position_m

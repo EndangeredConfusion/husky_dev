@@ -1,0 +1,4 @@
+string anchor_id
+float64 range_m
+geometry_msgs/Point position_m
+builtin_interfaces/Time timestamp
