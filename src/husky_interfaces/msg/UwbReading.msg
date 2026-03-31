@@ -1,4 +1,5 @@
 string anchor_id
-float64 range_m
+float64 distance_m
 geometry_msgs/Point position_m
+float64 quality
 builtin_interfaces/Time timestamp
