@@ -109,6 +109,7 @@ class UWB_Pub(Node):
                 pos_msg.position_m.x = anchor['position'][0]
                 pos_msg.position_m.y = anchor['position'][1]
                 pos_msg.position_m.z = anchor['position'][2]
+                pos_msg.timestamp = self.get_clock().now().to_msg()
                 pos_messages.append(pos_msg)
         pos_map_msg = UwbPosMap()
         pos_map_msg.uwb_positions_array = pos_messages
