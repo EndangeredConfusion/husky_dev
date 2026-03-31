@@ -1,2 +1,2 @@
-string anchorID
+string anchor_id
 geometry_msgs/Point position_m

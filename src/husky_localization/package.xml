@@ -4,7 +4,7 @@
   <name>husky_localization</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="kaeshev@gmail.c0om">vscode</maintainer>
+  <maintainer email="kaeshev@gmail.com">vscode</maintainer>
   <license>TODO: License declaration</license>
 
   <test_depend>ament_copyright</test_depend>

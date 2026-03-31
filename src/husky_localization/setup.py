@@ -14,7 +14,7 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='vscode',
-    maintainer_email='kaeshev@gmail.c0om',
+    maintainer_email='kaeshev@gmail.com',
     description='TODO: Package description',
     license='TODO: License declaration',
     extras_require={
@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'uwb_pub = husky_localization.uwb_pub:main'
         ],
     },
 )
