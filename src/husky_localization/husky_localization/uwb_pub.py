@@ -109,7 +109,6 @@ class UWB_Pub(Node):
                 pos_msg.position_m.x = anchor['position'][0]
                 pos_msg.position_m.y = anchor['position'][1]
                 pos_msg.position_m.z = anchor['position'][2]
-                pos_msg.timestamp = self.get_clock().now().to_msg()
                 pos_messages.append(pos_msg)
         pos_map_msg = UwbPosMap()
         pos_map_msg.uwb_positions_array = pos_messages
@@ -217,6 +216,7 @@ class UWB_Pub(Node):
                 uwb_reading.position_m.y = int.from_bytes(posy, byteorder='little', signed=True) / 1000.0
                 uwb_reading.position_m.z = int.from_bytes(posz, byteorder='little', signed=True) / 1000.0
                 uwb_reading.quality = dist_quality
+                uwb_reading.timestamp = self.get_clock().now().to_msg()
                 self.ranges_array.append(uwb_reading)
         self.range_publisher.publish(UwbReadingArray(uwb_readings_array=self.ranges_array))
         self.logger.debug(f"Published {len(self.ranges_array)} UWB ranges")
