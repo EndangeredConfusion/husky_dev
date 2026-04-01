@@ -215,7 +215,7 @@ class UWB_Pub(Node):
                 uwb_reading.position_m.x = int.from_bytes(posx, byteorder='little', signed=True) / 1000.0
                 uwb_reading.position_m.y = int.from_bytes(posy, byteorder='little', signed=True) / 1000.0
                 uwb_reading.position_m.z = int.from_bytes(posz, byteorder='little', signed=True) / 1000.0
-                uwb_reading.quality = dist_quality
+                uwb_reading.quality = float(dist_quality)
                 uwb_reading.timestamp = self.get_clock().now().to_msg()
                 self.ranges_array.append(uwb_reading)
         self.range_publisher.publish(UwbReadingArray(uwb_readings_array=self.ranges_array))
