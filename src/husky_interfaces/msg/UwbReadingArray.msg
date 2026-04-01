@@ -1,1 +1,1 @@
-UwbReading[] uwb_reading_array
+UwbReading[] uwb_readings_array
