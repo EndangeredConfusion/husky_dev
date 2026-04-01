@@ -210,7 +210,7 @@ class UWB_Pub(Node):
             
             if self.uwb_validator.add_range(anchor_id, distance_m):
                 uwb_reading = UwbReading()
-                uwb_reading.anchor_id = anchor_id
+                uwb_reading.anchor_id = str(anchor_id)
                 uwb_reading.distance_m = distance_m
                 uwb_reading.position_m.x = int.from_bytes(posx, byteorder='little', signed=True) / 1000.0
                 uwb_reading.position_m.y = int.from_bytes(posy, byteorder='little', signed=True) / 1000.0
