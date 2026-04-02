@@ -13,7 +13,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseWithCovarianceStamped, TwistWithCovarianceStamped
 from std_msgs.msg import Float64MultiArray
 
-from your_msgs_package.msg import UwbRanges, UwbMap  # TODO: replace
+from husky_interfaces.msg import UwbRanges, UwbMap
 
 
 def angle_wrap(angle: float) -> float:
