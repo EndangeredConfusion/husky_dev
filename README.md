@@ -13,3 +13,7 @@ the UWB configured
 
 map of lab:
 <img width="509" height="509" alt="image" src="https://github.com/user-attachments/assets/5dfee510-45ea-4d4c-993d-df247aa27079" />
+
+Anchor positions can be configured via:
+~/config/uwb_locations.yaml
+The anchor ID is whatever the anchor thinks it is. If an anchor is publishing that is not in this map wherever the anchor thinks it is (what it's firmware was configured to) will be used instead. This may be very wrong as many of the anchors are set to some pretty random locations.
