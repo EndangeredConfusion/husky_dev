@@ -117,7 +117,7 @@ class EkfLocalizationNode(Node):
         omega = float(msg.twist.twist.angular.z)
         self.latest_odom = (v, omega)
 
-    def uwb_map_callback(self, msg: UwbMap) -> None:
+    def uwb_map_callback(self, msg: UwbPosMap) -> None:
         new_map: Dict[str, np.ndarray] = {}
         for anchor in msg.uwb_positions_array:
             anchor_id = str(anchor.anchor_id)
@@ -127,7 +127,7 @@ class EkfLocalizationNode(Node):
             )
         self.anchor_map_xy = new_map
 
-    def uwb_ranges_callback(self, msg: UwbRanges) -> None:
+    def uwb_ranges_callback(self, msg: UwbReadingArray) -> None:
         measurements: List[AnchorMeasurement] = []
 
         for reading in msg.uwb_readings_array:
