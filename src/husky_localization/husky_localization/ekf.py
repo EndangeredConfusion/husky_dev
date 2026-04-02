@@ -13,7 +13,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseWithCovarianceStamped, TwistWithCovarianceStamped
 from std_msgs.msg import Float64MultiArray
 
-from husky_interfaces.msg import UwbRanges, UwbMap
+from husky_interfaces.msg import UwbReading, UwbReadingArray, UwbPos, UwbPosMap
 
 
 def angle_wrap(angle: float) -> float:
@@ -89,13 +89,13 @@ class EkfLocalizationNode(Node):
             20,
         )
         self.create_subscription(
-            UwbRanges,
+            UwbReadingArray,
             self.uwb_ranges_topic,
             self.uwb_ranges_callback,
             20,
         )
         self.create_subscription(
-            UwbMap,
+            UwbPosMap,
             self.uwb_map_topic,
             self.uwb_map_callback,
             10,
