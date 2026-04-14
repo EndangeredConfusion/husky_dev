@@ -27,3 +27,9 @@ start ekf:
 
 start uwb reader:
 `ros2 run husky_localization uwb_pub --ros-args -p uwb_port:=/dev/serial/by-id/usb-SEGGER_J-Link_000760168714-if00`
+
+
+TODO:
+- Tune EKF
+- RL Model Inputs/Outputs (subscribe to EKF /ekf_pose, output to TBD topic with desired location)
+- Controller (RL output -> motion)
