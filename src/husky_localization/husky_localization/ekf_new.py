@@ -43,7 +43,7 @@ class EkfLocalizationNode(Node):
         self.covariance = np.diag([.01, .01, 0.035])
                 
         # process noise covariance
-        self.declare_parameter('proc_noise_cov', np.diag([.1, .1, .1]))
+        self.declare_parameter('proc_noise_cov', [[.1, 0, 0], [0, .1, 0], [0, 0, .1]])
         self.proc_noise_cov = np.array(
             self.get_parameter('proc_noise_cov').value, 
             dtype=np.float64
