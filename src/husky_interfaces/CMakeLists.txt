@@ -16,6 +16,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/UwbReadingArray.msg"
   "msg/UwbPos.msg"
   "msg/UwbPosMap.msg"
+  "msg/EkfState.msg"
   DEPENDENCIES geometry_msgs builtin_interfaces std_msgs
 )
 
