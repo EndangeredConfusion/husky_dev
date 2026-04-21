@@ -25,7 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
             'uwb_pub = husky_localization.uwb_pub:main',
-            'ekf = husky_localization.ekf:main'
+            'ekf = husky_localization.ekf:main',
+            'ekf_new = husky_localization.ekf_new:main'
         ],
     },
 )
