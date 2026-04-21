@@ -53,9 +53,9 @@ class EkfLocalizationNode(Node):
 
         # measurement variances
         self.declare_parameter('odom_variance', .01)
-        self.uwb_variance = float(self.get_parameter('odom_variance').value)
-        self.declare_parameter('uwb_variance', .05)
-        self.odom_variance = float(self.get_parameter('uwb_variance').value)
+        self.odom_variance = float(self.get_parameter('odom_variance').value)
+        self.declare_parameter('uwb_variance', 1)
+        self.uwb_variance = float(self.get_parameter('uwb_variance').value)
         
         # height of the uwb tag on the robot .5 meters
         self.declare_parameter('uwb_height_on_robot', .5)
@@ -92,7 +92,7 @@ class EkfLocalizationNode(Node):
             durability=DurabilityPolicy.TRANSIENT_LOCAL
             )
         self.uwb_locations = None
-        self.odom_subscriber = self.create_subscription(
+        self.map_subscriber = self.create_subscription(
             UwbPosMap,
             self.uwb_map_topic,
             self.uwb_map_sub_callback,
