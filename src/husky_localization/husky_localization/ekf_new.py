@@ -40,10 +40,10 @@ class EkfLocalizationNode(Node):
             dtype=np.float64
         )
         self.state = self.initial_state
-        self.covariance = np.diag(.01, .01, 0.035)
+        self.covariance = np.diag([.01, .01, 0.035])
                 
         # process noise covariance
-        self.declare_parameter('proc_noise_cov', [.1, .1, .1])
+        self.declare_parameter('proc_noise_cov', np.diag([.1, .1, .1]))
         self.proc_noise_cov = np.array(
             self.get_parameter('proc_noise_cov').value, 
             dtype=np.float64
@@ -53,7 +53,7 @@ class EkfLocalizationNode(Node):
         self.declare_parameter('odom_variance', .01)
         self.uwb_variance = float(self.get_parameter('odom_variance').value)
         self.declare_parameter('uwb_variance', .05)
-        self.uwb_variance = float(self.get_parameter('uwb_variance').value)
+        self.odom_variance = float(self.get_parameter('uwb_variance').value)
         
         # subscribe to the UWB ranges topic
         self.declare_parameter('uwb_ranges_topic', '/uwb/ranges')
@@ -66,13 +66,15 @@ class EkfLocalizationNode(Node):
             10)
         
         # subscribe to the Husky's filtered Odometry
-        self.declare_parameter('odom_topic', 'a200-1201/odom/filtered')
-        self.uwb_ranges_topic = str(self.get_parameter('odom_topic').value)
+        self.last_odom_time = None
+        self.declare_parameter('odom_topic', '/a200_1201/platform/odom/filtered')
+        self.odom_topic = str(self.get_parameter('odom_topic').value)
         self.odom_subscriber = self.create_subscription(
             Odometry,
-            self.uwb_ranges_topic,
+            self.odom_topic,
             self.odom_sub_callback,
             10)
+
         
         # read the provided UWB Map
         self.declare_parameter('uwb_map_topic', '/uwb/map')
@@ -132,7 +134,7 @@ class EkfLocalizationNode(Node):
         uwb_jacobians = []
         uwb_expected_measurements = []
         uwb_measurements = []
-        
+   
         for uwb_reading in msg.uwb_readings_array:
             anchor_id = uwb_reading.anchor_id
             distance = float(uwb_reading.distance_m)
@@ -141,6 +143,8 @@ class EkfLocalizationNode(Node):
             stamp = uwb_reading.timestamp
             
             # update non mapped anchors with where the anchor thinks itself is
+            if self.uwb_locations is None:
+                self.uwb_locations = dict()
             if anchor_id not in self.uwb_locations:
                 anchor_x = anchor_pos.x
                 anchor_y = anchor_pos.y
@@ -164,6 +168,7 @@ class EkfLocalizationNode(Node):
         new_covariance = (I - kalman_gain @ np_uwb_jacobians) @ self.covariance @ (I - kalman_gain @ np_uwb_jacobians).T + kalman_gain @ sensor_noise_mat @ kalman_gain.T
         
         self.state = new_belief
+        self.state[2] = angle_wrap(self.state[2])
         self.covariance = new_covariance
         
         
