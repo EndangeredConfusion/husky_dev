@@ -57,8 +57,8 @@ class EkfLocalizationNode(Node):
         self.declare_parameter('uwb_variance', .05)
         self.odom_variance = float(self.get_parameter('uwb_variance').value)
         
-        # height of the uwb tag on the robot .45 meters
-        self.declare_parameter('uwb_height_on_robot', .45)
+        # height of the uwb tag on the robot .5 meters
+        self.declare_parameter('uwb_height_on_robot', .5)
         self.uwb_height_on_robot = float(self.get_parameter('uwb_height_on_robot').value)
         
         # subscribe to the UWB ranges topic
@@ -175,8 +175,10 @@ class EkfLocalizationNode(Node):
         I = np.eye(len(self.state))
         new_covariance = (I - kalman_gain @ np_uwb_jacobians) @ self.covariance @ (I - kalman_gain @ np_uwb_jacobians).T + kalman_gain @ sensor_noise_mat @ kalman_gain.T
         
+        old_theta = self.state[2]
         self.state = new_belief
-        self.state[2] = angle_wrap(self.state[2])
+        # self.state[2] = angle_wrap(self.state[2])
+        self.state[2] = old_theta
         self.covariance = new_covariance
         
         
@@ -205,7 +207,7 @@ class EkfLocalizationNode(Node):
             v = 0.0
         omega = msg.twist.twist.angular.z
         if -1e-4 < omega < 1e-4:
-            omega = 0
+            omega = 0.0
         # kalman predict
         # handle state update
         x = self.state[0]
@@ -216,7 +218,8 @@ class EkfLocalizationNode(Node):
         self.state[2] = angle_wrap(theta + omega*dt)
         # covariance update
         J_F = self.J_F(v, dt, theta)
-        new_cov = J_F @ self.covariance @ J_F.T + self.proc_noise_cov
+        proc_noise_cov = self.proc_noise_cov * (1/2 if (v == 0.0 and omega == 0.0) else 1)
+        new_cov = J_F @ self.covariance @ J_F.T + proc_noise_cov * dt
         self.covariance = new_cov
             
     
