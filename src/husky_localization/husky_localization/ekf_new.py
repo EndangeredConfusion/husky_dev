@@ -55,6 +55,10 @@ class EkfLocalizationNode(Node):
         self.declare_parameter('uwb_variance', .05)
         self.odom_variance = float(self.get_parameter('uwb_variance').value)
         
+        # height of the uwb tag on the robot .45 meters
+        self.declare_parameter('uwb_height_on_robot', .45)
+        self.uwb_height_on_robot = float(self.get_parameter('uwb_height_on_robot').value)
+        
         # subscribe to the UWB ranges topic
         self.declare_parameter('uwb_ranges_topic', '/uwb/ranges')
         self.uwb_ranges_topic = str(self.get_parameter('uwb_ranges_topic').value)
@@ -105,21 +109,23 @@ class EkfLocalizationNode(Node):
         # State | sx (self)x
         sx = self.state[0]
         sy = self.state[1]
+        sz = self.uwb_height_on_robot
         # UWBS | ux (uwb)x
         ux = uwb_location.x
         uy = uwb_location.y
         uz = uwb_location.z
-        return np.sqrt((sx - ux)**2 + (sy - uy)**2 + (uz)**2)
+        return np.sqrt((sx - ux)**2 + (sy - uy)**2 + (uz - sz)**2)
         
     def J_h_s_n(self, uwb_location: Point3D):
         # State | sx (self)x
         sx = self.state[0]
         sy = self.state[1]
+        sz = self.uwb_height_on_robot
         # UWBS | ux (uwb)x
         ux = uwb_location.x
         uy = uwb_location.y
         uz = uwb_location.z
-        denom = np.sqrt((sx - ux)**2 + (sy - uy)**2 + (uz)**2)
+        denom = np.sqrt((sx - ux)**2 + (sy - uy)**2 + (uz - sz)**2)
         if denom < 1e-6:
             return [0.0, 0.0, 0.0]
         else:

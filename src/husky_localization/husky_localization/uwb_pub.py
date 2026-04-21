@@ -125,8 +125,8 @@ class UWB_Pub(Node):
             self.logger.info(f"Successfully opened serial port: {self.uwb_port}")
         except serial.SerialException as e:
             self.logger.error(f"Failed to open serial port {self.uwb_port}: {e}")
-            return
             self.ser.reset_input_buffer()
+            return
         
         # check that reader is working (and that uwb is a tag)
         self.ser.write(dwm_cfg_get) # send config get command to check connection
@@ -139,9 +139,8 @@ class UWB_Pub(Node):
 
         else:
             self.logger.error(f"Unexpected response from UWB tag: {resp}. Check connection and config.")
-            return
             self.ser.reset_input_buffer()
-            
+            return
 
     def read_uwb_ranges(self):
         read_command = bytes([0x0C, 0x00])
@@ -153,8 +152,8 @@ class UWB_Pub(Node):
             self.logger.debug("Transaction beginning successfully")
         else:
             self.logger.error("Transaction beginning failed")
-            return
             self.ser.reset_input_buffer()
+            return
 
         success, position_resp = validate_serial_read(self.ser, 15)
         position_good_prefix = bytes([0x41, 0x0D])
