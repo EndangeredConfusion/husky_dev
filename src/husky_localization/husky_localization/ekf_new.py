@@ -200,8 +200,12 @@ class EkfLocalizationNode(Node):
             return
         
         self.last_odom_time = t
-        v = msg.twist.twist.linear.x
+        v = float(msg.twist.twist.linear.x)
+        if -1e-4 < v < 1e-4:
+            v = 0.0
         omega = msg.twist.twist.angular.z
+        if -1e-4 < omega < 1e-4:
+            omega = 0
         # kalman predict
         # handle state update
         x = self.state[0]
