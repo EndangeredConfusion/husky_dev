@@ -1,5 +1,5 @@
 """
-Launch the RL policy node and lambda node together.
+Launch all three RL-side nodes: lambda, rl_policy, astar.
 
 Fixed lambda example:
     ros2 launch husky_rl rl.launch.py adaptive:=false fixed_lambda:="[1,2,2,9]"
@@ -41,9 +41,28 @@ def generate_launch_description():
         output='screen',
     )
 
+    astar_node = Node(
+        package='husky_rl',
+        executable='astar_node',
+        name='astar_node',
+        # TODO: set cell_size_m once lab dimensions are measured
+        parameters=[{'cell_size_m': 0.0}],
+        output='screen',
+    )
+
+    controller_node = Node(
+        package='husky_control',
+        executable='point_controller',
+        name='point_controller',
+        parameters=[{'points_topic': '/rl_path'}],
+        output='screen',
+    )
+
     return LaunchDescription([
         adaptive_arg,
         fixed_lambda_arg,
         lambda_node,
         rl_policy_node,
+        astar_node,
+        controller_node,
     ])

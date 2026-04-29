@@ -22,6 +22,7 @@ Two modes (set at launch via parameter):
 
 from __future__ import annotations
 
+import json
 import numpy as np
 import rclpy
 from rclpy.node import Node
@@ -65,14 +66,18 @@ class LambdaNode(Node):
         super().__init__('lambda_node')
 
         # Parameters
-        self.declare_parameter('adaptive',     False)
-        self.declare_parameter('fixed_lambda', rclpy.Parameter.Type.DOUBLE_ARRAY)
+        # adaptive and fixed_lambda are declared as strings so that
+        # LaunchConfiguration substitutions (which always resolve to strings)
+        # are accepted without type-mismatch errors.
+        self.declare_parameter('adaptive',     'false')
+        self.declare_parameter('fixed_lambda', '')
         self.declare_parameter('cell_topic',   '/agent_grid_cell')
         self.declare_parameter('lambda_topic', '/lambda_values')
 
-        self._adaptive   = self.get_parameter('adaptive').value
-        cell_topic       = self.get_parameter('cell_topic').value
-        lambda_topic     = self.get_parameter('lambda_topic').value
+        adaptive_str   = str(self.get_parameter('adaptive').value).strip().lower()
+        self._adaptive = adaptive_str in ('true', '1', 'yes')
+        cell_topic     = self.get_parameter('cell_topic').value
+        lambda_topic   = self.get_parameter('lambda_topic').value
 
         # Transient-local publisher so RL policy node gets the value
         # regardless of startup order.
@@ -86,18 +91,17 @@ class LambdaNode(Node):
 
         if not self._adaptive:
             # ── Fixed mode ────────────────────────────────────────────────
+            raw = self.get_parameter('fixed_lambda').value
             try:
-                fixed = list(self.get_parameter('fixed_lambda').value)
-            except Exception:
+                fixed = json.loads(raw)
+                if not isinstance(fixed, list) or len(fixed) != NUM_GOALS:
+                    raise ValueError
+            except (ValueError, TypeError):
                 self.get_logger().fatal(
-                    'adaptive:=false but fixed_lambda was not provided. '
-                    'Pass e.g. --ros-args -p fixed_lambda:="[1,2,2,9]"'
+                    f'fixed_lambda must be a JSON list of {NUM_GOALS} numbers, '
+                    f'e.g. --ros-args -p fixed_lambda:="[1,2,2,9]". Got: "{raw}"'
                 )
-                raise RuntimeError('fixed_lambda parameter required in fixed mode')
-
-            if len(fixed) != NUM_GOALS:
-                raise ValueError(
-                    f'fixed_lambda must have {NUM_GOALS} values, got {len(fixed)}')
+                raise RuntimeError('invalid fixed_lambda')
 
             self._fixed_values = np.clip(
                 np.array(fixed, dtype=np.float32), LAMBDA_MIN, LAMBDA_MAX)

@@ -29,7 +29,46 @@ start uwb reader:
 `ros2 run husky_localization uwb_pub --ros-args -p uwb_port:=/dev/serial/by-id/usb-SEGGER_J-Link_000760168714-if00`
 
 
-TODO:
+## RL Pipeline
+
+Pipeline:
+```
+EKF -> Discretizer -> RL Policy -> A* -> Controller -> Motors
+                          ^
+                    Lambda Node
+```
+
+All RL-side nodes live in `src/husky_rl/`. Build order:
+```
+colcon build --packages-select husky_interfaces
+colcon build --packages-select husky_rl husky_control
+```
+
+**Launch (fixed lambda):**
+```
+ros2 launch husky_rl rl.launch.py adaptive:=false fixed_lambda:="[1,2,2,9]"
+```
+
+**Launch (adaptive lambda / Algo 2):**
+```
+ros2 launch husky_rl rl.launch.py adaptive:=true
+```
+
+This starts all four nodes: `lambda_node`, `rl_policy`, `astar_node`, `point_controller`.
+
+### Topics
+
+| Topic                | Type                             | Publisher        | Subscriber                         |
+| -------------------- | -------------------------------- | ---------------- | ---------------------------------- |
+| `/agent_grid_cell`   | `husky_interfaces/GridCell`      | Discretizer      | rl_policy, lambda_node, astar_node |
+| `/lambda_values`     | `std_msgs/Float32MultiArray`     | lambda_node      | rl_policy                          |
+| `/rl_goal`           | `husky_interfaces/GridCell`      | rl_policy        | astar_node                         |
+| `/rl_goal_index`     | `std_msgs/Int32`                 | rl_policy        | debug                              |
+| `/rl_path`           | `std_msgs/Int32MultiArray`       | astar_node       | point_controller                   |
+| `/a200_1201/cmd_vel` | `geometry_msgs/Twist`            | point_controller | motors                             |
+
+### TODO
+- **cell_size_m**: measure physical size of one grid cell in the lab (metres), then set in `src/husky_rl/launch/rl.launch.py` under `astar_node` parameters. Until then A* publishes raw grid integers and Stanley control will not be scaled correctly.
+- **Discretizer node**: must publish `husky_interfaces/GridCell` to `/agent_grid_cell`.
 - Tune EKF
-- RL Model Inputs/Outputs (subscribe to EKF /ekf_pose, output to TBD topic with desired location)
-- Controller (RL output -> motion)
+- Review and finalize `point_controller.py` integration

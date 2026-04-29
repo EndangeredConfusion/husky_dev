@@ -3,7 +3,7 @@
 RL Policy Node
 ==============
 Pipeline position:
-    Discretizer -> [RL Policy] -> Controller
+    Discretizer -> [RL Policy] -> A* Node -> Controller
                         ^
                   Lambda Node
 

@@ -28,6 +28,7 @@ setup(
         'console_scripts': [
             'rl_policy = husky_rl.rl_policy_node:main',
             'lambda_node = husky_rl.lambda_node:main',
+            'astar_node = husky_rl.astar_node:main',
         ],
     },
 )
