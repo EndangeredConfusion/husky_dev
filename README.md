@@ -54,7 +54,18 @@ ros2 launch husky_rl rl.launch.py adaptive:=false fixed_lambda:="[1,2,2,9]"
 ros2 launch husky_rl rl.launch.py adaptive:=true
 ```
 
-This starts all four nodes: `lambda_node`, `rl_policy`, `astar_node`, `point_controller`.
+This starts five nodes: `discretizer`, `lambda_node`, `rl_policy`, `astar_node`,
+and `point_controller`. The Discretizer deliberately publishes nothing while
+`cell_size_m` is left at its safe default of `0.0`.
+
+Before enabling the full pipeline, measure the grid geometry and launch with:
+```
+ros2 launch husky_rl rl.launch.py \
+  cell_size_m:=<metres_per_cell> \
+  origin_x_m:=<grid_origin_x> \
+  origin_y_m:=<grid_origin_y> \
+  invert_y_axis:=false
+```
 
 ### Topics
 
@@ -68,7 +79,9 @@ This starts all four nodes: `lambda_node`, `rl_policy`, `astar_node`, `point_con
 | `/a200_1201/cmd_vel` | `geometry_msgs/Twist`            | point_controller | motors                             |
 
 ### TODO
-- **cell_size_m**: measure physical size of one grid cell in the lab (metres), then set in `src/husky_rl/launch/rl.launch.py` under `astar_node` parameters. Until then A* publishes raw grid integers and Stanley control will not be scaled correctly.
-- **Discretizer node**: must publish `husky_interfaces/GridCell` to `/agent_grid_cell`.
+- **Grid calibration**: measure `cell_size_m` and the world-frame grid origin.
+  The Discretizer is implemented, but remains disabled until these values are
+  supplied. A* still publishes raw grid integers, so the controller is not yet
+  safe to run against physical coordinates.
 - Tune EKF
 - Review and finalize `point_controller.py` integration
