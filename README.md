@@ -1,3 +1,15 @@
+## Transformer interface (Jetson, stages 0–1)
+
+The isolated ROS/GPU interface is in `src/husky_transformer_bridge` and
+`src/husky_transformer_policy`. See [deployment and tests](docs/transformer/README.md)
+and the [input contract](docs/transformer/CONTRACT.txt).
+It does not subscribe to live odometry or issue navigation/velocity commands yet.
+Weights, the GPU environment and runtime logs stay in `~/transformer_deployment`.
+
+The sections below describe the earlier robot/DQN setup; their launch and velocity
+examples are not the Transformer smoke-test procedure or the current upgraded
+robot's velocity interface.
+
 robot: a200-balto
 
 

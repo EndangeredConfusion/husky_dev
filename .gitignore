@@ -7,3 +7,10 @@ log/
 
 .DS_Store
 .vscode/.ropeproject
+
+# Transformer deployment artifacts stay outside the source repository.
+transformer_deployment/
+*.sock
+*_result.json
+**/venv/
+**/.venv/

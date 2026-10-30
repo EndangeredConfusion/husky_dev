@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>husky_transformer_policy</name><version>0.1.0</version>
+  <description>Isolated Transformer policy interface for Husky, without motion outputs.</description>
+  <maintainer email="xuyaoalice@gmail.com">alice</maintainer>
+  <license>TODO: License declaration</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <export><build_type>ament_python</build_type></export>
+</package>

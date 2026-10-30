@@ -1,0 +1,41 @@
+Phase 0/1 protocol v1 (implemented; Jetson checks recorded in *_result.json)
+
+Scope: isolated ROS-to-GPU request/response only. No robot actuation.
+System Python runs ros_bridge.py; existing GPU venv runs policy_worker.py.
+Unix socket permissions are restricted by umask 077; no TCP listener.
+JSON object, UTF-8, newline terminated, maximum 65536 bytes, one request per connection.
+Requests include version=1, request_id (transport UUID), op and operation payload.
+Replies echo version/request_id and contain ok plus result or error.
+ROS phase-1 transport is std_msgs/String JSON on /transformer/shadow/request and response.
+ROS input includes client_id and the operation payload; output echoes client_id.
+This is a provisional RPC test envelope, not the final StateSnapshot/MacroTransition message package.
+Only a nonzero isolated domain is permitted; default 42 must be checked for other users before testing.
+Bridge permits one in-flight call; additional requests get BUSY, never an unbounded queue.
+Polling timer is 10 Hz; this does not claim measured end-to-end 10 Hz throughput.
+
+status: no payload; returns epoch, history_version, history_size, task_ready, model_hash, precision, context.
+init_task: lambda_values, four raw finite numbers in [0,10]. Resets history and returns a new epoch.
+infer: epoch, history_version, agent_pos (raw integer [x,y]), optional state_seq.
+Returns ticket, state_seq, goal_index, goal_grid_xy, logits, inference_ms and current status.
+Inference snapshots committed history and does not change committed size/version.
+At most 32 recent tickets are retained; expired tickets cannot be committed.
+commit: epoch, history_version, ticket, actual action integer 0..3, raw finite reward,
+        terminated boolean, truncated boolean.
+The ticket binds the original observation; actual executed action may differ from prediction.
+Commit increments history_version once and invalidates other tickets.
+An identical retry of the last commit is acknowledged without mutation (transport request_id excluded).
+Changed retries, stale versions, stale epochs and unknown tickets are rejected.
+reset: epoch; clears task and history and returns a new epoch.
+Recovery after worker restart requires explicit init_task; no silent persistence restoration.
+
+Raw values cross both ROS and IPC boundaries. Only original ad_online.py normalizes:
+position/[16,10], lambda/10, reward/10. No additional normalization in the adapter.
+Context capacity is 2399 completed records plus current observation; maximum 2400.
+Goal order is 0=(1,1),1=(15,1),2=(1,9),3=(15,9).
+Lambda is fixed per task epoch. Episode end flags mark the next observation as episode_start;
+history is retained across episodes within a task. Task reset clears all history.
+
+Explicitly deferred to later phases: map calibration, walkable-cell/source freshness validation,
+actual execution/feedback producers, durable history recovery, final typed ROS messages,
+full-context ROS performance acceptance, and robot motion. No feedback is fabricated.
+A commit is an explicit test/producer input; phase 1 does not authorize a live execution producer.

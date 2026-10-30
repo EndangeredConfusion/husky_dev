@@ -1,0 +1,14 @@
+{
+  "format_version": 1,
+  "checkpoint_sha256": "012765a00264a5b64cc14ef2cd3227a2d2f4d8d03463de4f79a1969c87a53f50",
+  "ad_transformer_sha256": "971f96e699be80e148af54671ba11bcb29ff6bf8baa84c91d988501f17b1a598",
+  "ad_online_sha256": "ec2ca0e8e71ddec57903216d4fb041d3dda957b3d6f56c884163daba50958d60",
+  "python": "3.12",
+  "torch": "2.10.0+cu130",
+  "numpy": "1.26.4",
+  "ros_distro": "jazzy",
+  "precision": "bf16",
+  "context": 2400,
+  "deployment_directory": "~/transformer_deployment",
+  "weights_committed": false
+}
