@@ -1,4 +1,4 @@
-Phase 0/1 protocol v1 (implemented; Jetson checks recorded in *_result.json)
+Transformer interface protocol v1 (stages 0–4)
 
 Scope: isolated ROS-to-GPU request/response only. No robot actuation.
 System Python runs ros_bridge.py; existing GPU venv runs policy_worker.py.
@@ -11,7 +11,8 @@ ROS input includes client_id and the operation payload; output echoes client_id.
 This is a provisional RPC test envelope, not the final StateSnapshot/MacroTransition message package.
 Only a nonzero isolated domain is permitted; default 42 must be checked for other users before testing.
 Bridge permits one in-flight call; additional requests get BUSY, never an unbounded queue.
-Polling timer is 10 Hz; this does not claim measured end-to-end 10 Hz throughput.
+Completed IPC requests trigger a ROS guard condition immediately. Replay pacing
+is 10 Hz and is independent of inference completion and history submission.
 
 status: no payload; returns epoch, history_version, history_size, task_ready, model_hash, precision, context.
 init_task: lambda_values, four raw finite numbers in [0,10]. Resets history and returns a new epoch.
@@ -23,8 +24,15 @@ commit: epoch, history_version, ticket, actual action integer 0..3, raw finite r
         terminated boolean, truncated boolean.
 The ticket binds the original observation; actual executed action may differ from prediction.
 Commit increments history_version once and invalidates other tickets.
-An identical retry of the last commit is acknowledged without mutation (transport request_id excluded).
+Identical retries of the latest 256 committed tickets are acknowledged without mutation
+(transport request_id excluded). The original acknowledgment is returned; query status
+for current history_version after retrying an older commit.
 Changed retries, stale versions, stale epochs and unknown tickets are rejected.
+Optional state_seq in feedback must match the observation bound to its ticket.
+All feedback fields are validated before a candidate history is atomically installed.
+cancel: epoch, history_version, ticket. Discards a never-executed candidate without history growth.
+abort: epoch. Execution outcome is uncertain; preserves history but blocks inference/commits
+until explicit task initialization/reset. Never fabricates zero reward or episode completion.
 reset: epoch; clears task and history and returns a new epoch.
 Recovery after worker restart requires explicit init_task; no silent persistence restoration.
 
@@ -35,7 +43,12 @@ Goal order is 0=(1,1),1=(15,1),2=(1,9),3=(15,9).
 Lambda is fixed per task epoch. Episode end flags mark the next observation as episode_start;
 history is retained across episodes within a task. Task reset clears all history.
 
-Explicitly deferred to later phases: map calibration, walkable-cell/source freshness validation,
-actual execution/feedback producers, durable history recovery, final typed ROS messages,
-full-context ROS performance acceptance, and robot motion. No feedback is fabricated.
+Recorded replay requires contiguous decision IDs, true history start, fixed lambda,
+valid raw fields and episode starts consistent with previous terminated/truncated flags.
+Each recorded actual action/reward is committed exactly once. Predictions remain shadow output.
+The replay logs late predictions as discarded; their associated recorded actual feedback
+still advances offline history. This is not execution of a stale model prediction.
+Explicitly deferred: map calibration, walkable-cell/source freshness validation,
+real execution/feedback producers, durable history recovery, final typed ROS messages,
+and robot motion. No real feedback is fabricated.
 A commit is an explicit test/producer input; phase 1 does not authorize a live execution producer.

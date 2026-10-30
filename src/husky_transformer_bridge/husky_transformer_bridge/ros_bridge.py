@@ -18,7 +18,8 @@ class Bridge(Node):
         self.ident=None
         self.pub=self.create_publisher(String,'response',10)
         self.sub=self.create_subscription(String,'request',self.receive,10)
-        self.timer=self.create_timer(.1,self.poll)
+        self.closing=False
+        self.completion=self.create_guard_condition(self.poll)
 
     def emit(self,ident,**payload):
         self.pub.publish(String(data=json.dumps(dict(client_id=ident,**payload),allow_nan=False)))
@@ -33,11 +34,15 @@ class Bridge(Node):
             if self.future is not None:
                 self.emit(ident,ok=False,error='BUSY: retry explicitly')
                 return
-            if q.get('op') not in ('init_task','status','infer','commit','reset'):
+            if q.get('op') not in ('init_task','status','infer','commit','reset','cancel','abort'):
                 raise ValueError('Unknown operation')
             self.ident=ident
             self.future=self.pool.submit(request,self.path,timeout=1.0,**q)
+            self.future.add_done_callback(self.wake)
         except Exception as exc: self.emit(ident,ok=False,error=str(exc))
+
+    def wake(self, future):
+        if not self.closing: self.completion.trigger()
 
     def poll(self):
         if self.future is None or not self.future.done(): return
@@ -46,6 +51,7 @@ class Bridge(Node):
         finally: self.future=None;self.ident=None
 
     def close(self):
+        self.closing=True
         self.pool.shutdown(wait=True,cancel_futures=True)
         self.destroy_node()
 
@@ -58,7 +64,9 @@ def main():
     rclpy.init(domain_id=a.domain_id)
     signal.signal(signal.SIGINT,signal.default_int_handler)
     node=Bridge(a.socket)
-    try: rclpy.spin(node)
+    try:
+        # Guard callbacks wake immediately; bounded idle wait also services Python signals.
+        while rclpy.ok(): rclpy.spin_once(node,timeout_sec=.1)
     except (KeyboardInterrupt,ExternalShutdownException): pass
     finally:
         node.close()

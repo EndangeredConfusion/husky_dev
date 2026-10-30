@@ -1,9 +1,11 @@
-## Transformer interface (Jetson, stages 0–1)
+## Transformer interface (Jetson, stages 0–1 and 3–4)
 
 The isolated ROS/GPU interface is in `src/husky_transformer_bridge` and
 `src/husky_transformer_policy`. See [deployment and tests](docs/transformer/README.md)
 and the [input contract](docs/transformer/CONTRACT.txt).
 It does not subscribe to live odometry or issue navigation/velocity commands yet.
+Transactional history and a paced, isolated ROS/GPU recorded replay are available.
+Live state adaptation and calibration remain outstanding.
 Weights, the GPU environment and runtime logs stay in `~/transformer_deployment`.
 
 The sections below describe the earlier robot/DQN setup; their launch and velocity

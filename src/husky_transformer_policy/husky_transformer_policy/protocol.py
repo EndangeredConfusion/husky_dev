@@ -8,14 +8,17 @@ VERSION = 1
 
 def receive(sock):
     data = bytearray()
-    while not data.endswith(b'\n'):
-        chunk = sock.recv(1)
+    while b'\n' not in data:
+        chunk = sock.recv(min(4096, LIMIT + 1 - len(data)))
         if not chunk:
             raise ConnectionError('Disconnected before complete message')
         data.extend(chunk)
         if len(data) > LIMIT:
             raise ValueError('Message exceeds limit')
-    value = json.loads(data)
+    line, trailing = data.split(b'\n', 1)
+    if trailing:
+        raise ValueError('Only one message is allowed per connection')
+    value = json.loads(line)
     if not isinstance(value, dict):
         raise ValueError('Message must be an object')
     return value

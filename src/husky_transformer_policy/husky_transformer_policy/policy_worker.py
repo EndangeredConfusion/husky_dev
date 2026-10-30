@@ -1,18 +1,18 @@
 """Single-owner GPU history worker. Never publishes robot commands."""
 import argparse
-import copy
 import hashlib
-import math
 import os
 from pathlib import Path
 import socket
 import signal
 import sys
 import time
-import uuid
 from husky_transformer_policy.protocol import VERSION, receive, send
 
-class Policy:
+from husky_transformer_policy.history_manager import HistoryManager
+
+
+class Policy(HistoryManager):
     def __init__(self, model_dir):
         import numpy as np
         import torch
@@ -35,82 +35,39 @@ class Policy:
         self.model = ADTransformer(ModelConfig(**saved['config'])).cuda().eval()
         self.model.load_state_dict(saved['model'], strict=True)
         self.model.requires_grad_(False)
-        self.reset()
+        super().__init__(OnlineContext, np)
         # Prepare CUDA kernels before accepting requests; leave task/history empty.
         self.handle(dict(op='init_task',lambda_values=[7,2,2,2]))
         for _ in range(3):
             self.handle(dict(op='infer',epoch=self.epoch,history_version=0,agent_pos=[4,3]))
         self.reset()
 
-    def reset(self):
-        self.epoch = str(uuid.uuid4())
-        self.ctx = self.Context(2400)
-        self.lam = None
-        self.next_episode = True
-        self.last_commit = None
-        self.tickets = {}
-        return self.status()
-
     def status(self):
-        return dict(epoch=self.epoch, history_version=self.ctx.decisions,
-                    history_size=self.ctx.size, task_ready=self.lam is not None,
-                    model_hash=self.digest, precision='bf16', context=2400)
+        return dict(**super().status(), model_hash=self.digest, precision='bf16', context=2400,
+                    peak_cuda_allocated_bytes=self.torch.cuda.max_memory_allocated(),
+                    peak_cuda_reserved_bytes=self.torch.cuda.max_memory_reserved())
 
     def handle(self, q):
         op = q['op']
         if op == 'status': return self.status()
-        if op == 'init_task':
-            lam = q['lambda_values']
-            if not isinstance(lam, list) or len(lam) != 4 or any(
-                    type(x) not in (int,float) or not math.isfinite(x) or not 0<=x<=10 for x in lam):
-                raise ValueError('Expected four finite raw lambda values in [0,10]')
-            self.reset()
-            self.lam = self.np.asarray(lam, dtype=self.np.float32)
-            return self.status()
-        if q.get('epoch') != self.epoch: raise ValueError('Stale task epoch')
+        if op == 'init_task': return self.configure(q['lambda_values'])
+        self.require_epoch(q)
         if op == 'reset': return self.reset()
-        if self.lam is None: raise ValueError('Task not configured')
-        if op == 'commit' and self.last_commit is not None and q == self.last_commit[0]:
-            return self.last_commit[1]
-        if q.get('history_version') != self.ctx.decisions:
-            raise ValueError('Stale history version')
-        if op == 'infer':
-            pos = q['agent_pos']
-            if not isinstance(pos,list) or len(pos)!=2 or any(type(x) is not int for x in pos):
-                raise ValueError('Expected raw integer grid position')
-            if not (0<=pos[0]<=16 and 0<=pos[1]<=10): raise ValueError('Position outside grid')
-            ctx = copy.deepcopy(self.ctx)
-            obs = dict(agent_pos=self.np.asarray(pos,dtype=self.np.float32),lambda_values=self.lam.copy())
-            ctx.observe(obs, self.next_episode)
-            start = time.perf_counter()
-            batch,last = self.pack([ctx], 'cuda')
-            with self.torch.inference_mode(), self.torch.autocast('cuda',dtype=self.torch.bfloat16):
-                scores = self.model(batch)[0,last[0]].float().cpu()
-            if not self.torch.isfinite(scores).all(): raise ValueError('Nonfinite logits')
-            action = int(scores.argmax())
-            ticket = str(uuid.uuid4())
-            self.tickets[ticket] = obs
-            while len(self.tickets)>32: self.tickets.pop(next(iter(self.tickets)))
-            return dict(**self.status(), ticket=ticket, state_seq=q.get('state_seq'),
-                        goal_index=action, goal_grid_xy=[(1,1),(15,1),(1,9),(15,9)][action],
-                        logits=scores.tolist(), inference_ms=(time.perf_counter()-start)*1000)
-        if op == 'commit':
-            ticket=q['ticket']; action=q['action']; reward=q['reward']
-            if ticket not in self.tickets: raise ValueError('Unknown or expired decision ticket')
-            if type(action) is not int or not 0<=action<4: raise ValueError('Invalid actual action')
-            if type(reward) not in (int,float) or not math.isfinite(reward): raise ValueError('Invalid raw reward')
-            if abs(reward/10.)>self.np.finfo(self.np.float32).max:
-                raise ValueError('Reward exceeds representable model input')
-            if any(type(q.get(k)) is not bool for k in ['terminated','truncated']):
-                raise ValueError('Explicit boolean end flags required')
-            self.ctx.observe(self.tickets[ticket],self.next_episode)
-            self.ctx.commit(action,reward,q['terminated'],q['truncated'])
-            self.next_episode=q['terminated'] or q['truncated']
-            self.tickets.clear()
-            result=self.status()
-            self.last_commit=(copy.deepcopy(q),result)
-            return result
-        raise ValueError('Unknown operation')
+        if op == 'commit': return self.commit(q)
+        if op == 'cancel': return self.cancel(q)
+        if op == 'abort': return self.abort(q)
+        if op != 'infer': raise ValueError('Unknown operation')
+        start = time.perf_counter()
+        snapshot, obs = self.prepare(q)
+        batch, last = self.pack([snapshot], 'cuda')
+        with self.torch.inference_mode(), self.torch.autocast('cuda', dtype=self.torch.bfloat16):
+            scores = self.model(batch)[0,last[0]].float().cpu()
+        if not self.torch.isfinite(scores).all(): raise ValueError('Nonfinite logits')
+        action = int(scores.argmax())
+        ticket = self.issue(obs, q.get('state_seq'))
+        return dict(**self.status(), ticket=ticket, state_seq=q.get('state_seq'),
+                    goal_index=action, goal_grid_xy=[(1,1),(15,1),(1,9),(15,9)][action],
+                    logits=scores.tolist(), inference_ms=(time.perf_counter()-start)*1000)
 
 def main():
     def terminate(signum,frame):
