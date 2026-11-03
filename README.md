@@ -8,6 +8,8 @@ Transactional history and a paced, isolated ROS/GPU recorded replay are availabl
 Live state adaptation and calibration remain outstanding.
 Weights, the GPU environment and runtime logs stay in `~/transformer_deployment`.
 
+See the [GPS reception and NavFn/A* bench](bench/gps_navfn/README.md) for setup, rerun commands and recorded results.
+
 The sections below describe the earlier robot/DQN setup; their launch and velocity
 examples are not the Transformer smoke-test procedure or the current upgraded
 robot's velocity interface.
