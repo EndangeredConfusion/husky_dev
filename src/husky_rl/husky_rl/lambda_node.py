@@ -69,7 +69,7 @@ class LambdaNode(Node):
         # adaptive and fixed_lambda are declared as strings so that
         # LaunchConfiguration substitutions (which always resolve to strings)
         # are accepted without type-mismatch errors.
-        self.declare_parameter('adaptive',     'false')
+        self.declare_parameter('adaptive', False)
         self.declare_parameter('fixed_lambda', '')
         self.declare_parameter('cell_topic',   '/agent_grid_cell')
         self.declare_parameter('lambda_topic', '/lambda_values')

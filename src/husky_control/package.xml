@@ -11,6 +11,10 @@
   <depend>rclpy</depend>
   <depend>geometry_msgs</depend>
   <depend>husky_interfaces</depend>
+  <depend>nav_msgs</depend>
+  <depend>std_msgs</depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
   <exec_depend>python3-serial</exec_depend>
   

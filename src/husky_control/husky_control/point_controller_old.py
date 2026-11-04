@@ -43,12 +43,12 @@ class PointController(Node):
         #self.declare_parameter('cmd_vel_topic', '/a200_1201/cmd_vel')
 
         # Gazebo husky
-        self.declare_parameter('cmd_vel_topic', '/a200_0000/cmd_vel')
+        self.declare_parameter('cmd_vel_topic', '/cmd_vel')
         self.cmd_topic = str(self.get_parameter('cmd_vel_topic').value)
         
         
         # TODO points topic needs to exist
-        self.declare_parameter('nominal_velocity', '.3')
+        self.declare_parameter('nominal_velocity', 0.3)
         self.nominal_velocity = float(self.get_parameter('nominal_velocity').value)
 
         
@@ -67,7 +67,7 @@ class PointController(Node):
         self.smoothed_points = None
         self.path_obj = None
         self.points_subscriber = self.create_subscription(
-            Int32MultiArray,
+            Float64MultiArray,
             self.points_topic,
             self.point_callback,
             10)
@@ -96,7 +96,7 @@ class PointController(Node):
         return pts
     
     
-    def fit_continuous_path(path, npoints=75):
+    def fit_continuous_path(self, path, npoints=75):
         ''' applies third degree spline interpolation on the smoothed points '''
         path_array = np.array(path)
         # split by columns to get X and Y
@@ -109,15 +109,15 @@ class PointController(Node):
         return spl
     
     
-    def point_callback(self, msg: Int32MultiArray):
+    def point_callback(self, msg: Float64MultiArray):
         ''' updates internal continuous path with the published desired points '''
         self.get_logger().info(f'got path: {list(msg.data)}')
         stride = 2
         xs = msg.data[::stride]
         ys = msg.data[1::stride]
-        self.point_array = zip(xs, ys)
+        self.point_array = np.column_stack([xs, ys])
         self.smoothed_points = self.chaikin_smooth(self.point_array)
-        self.path_obj = self.fit_continuous_path(self.point_array)
+        self.path_obj = self.smoothed_points(self.point_array)
         
         
     def localization_callback(self, msg: EkfState):
@@ -145,7 +145,7 @@ class PointController(Node):
         sq_dists = np.sum(deltas * deltas, axis=1)
         min_idx = np.argmin(sq_dists)
         t_star = t_vals[min_idx]
-        path_point = path_pts(t_star)
+        path_point = path_pts[min_idx]
         px, py = path_point
         path_deriv = self.path_obj.derivative(1)(t_star)
 
@@ -164,15 +164,15 @@ class PointController(Node):
         v = self.nominal_velocity
         k = 1
         cross_track_e_term = np.arctan2(k * cross_track_e, abs(v) + 1e-6)
-        
+        0.3
         k_omega = 1
         k_cross = 1
         desired_omega = k_omega * angle_error + k_cross * cross_track_e_term
         # reverse heading tendency as robot might turn opposite way TODO check this
-        desired_omega *= -1
+        # desired_omega *= -1
         # no point in as much if we are facing in the wrong direction
         # still will move a bit to help localization
-        if -np.pi < angle_error < np.pi:
+        if abs(angle_error) > np.pi/2:
             desired_v = self.nominal_velocity
         else:
             desired_v = self.nominal_velocity / 2
