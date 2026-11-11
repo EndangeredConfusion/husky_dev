@@ -14,6 +14,7 @@ notes:
 
 import numpy as np
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 
 from geometry_msgs.msg import Twist, TwistStamped
@@ -31,7 +32,7 @@ class PointController(Node):
         # husky_rl/launch/rl.launch.py sets this to /rl_path
         self.declare_parameter('points_topic', '/rl_path')
         self.declare_parameter('cmd_vel_topic', '/a200_1201/cmd_vel')
-        self.declare_parameter('use_stamped', True)
+        self.declare_parameter('use_stamped', True)  # Gazebo / Jazzy Clearpath uses TwistStamped
         self.declare_parameter('localization_topic', 'uwb_local/ekf')
         self.declare_parameter('nominal_velocity', 0.3)
         self.declare_parameter('k_heading', 1.0)
@@ -122,7 +123,7 @@ def main():
     node = PointController()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()
