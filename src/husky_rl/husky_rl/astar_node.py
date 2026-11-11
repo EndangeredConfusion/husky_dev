@@ -8,24 +8,24 @@ Pipeline position:
 
 Triggered by every new /rl_goal.  Runs A* on the hardcoded 17x11 grid
 (identical to the training environment) and publishes the resulting
-waypoint sequence as Int32MultiArray([x0,y0, x1,y1, ...]) to the controller.
-
-TODO: grid -> world coordinate conversion.
-      When cell_size_m is known (measured in lab), multiply each grid
-      coordinate by cell_size_m before publishing so the controller's
-      Stanley algorithm operates in metres.
-      Until then, coordinates are published as raw grid integers.
+waypoint sequence to the controller as Float64MultiArray([e0,n0, e1,n1, ...]):
+each path cell's centre in metres (east, north) in the local frame of the
+'86 Field cell table (config/field86_cells.yaml, origin Star_1).  Planning
+itself still runs on the grid exactly as in training.
 """
 
 from __future__ import annotations
 
 import numpy as np
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
-from std_msgs.msg import Int32MultiArray
+from std_msgs.msg import Float64MultiArray
 from husky_interfaces.msg import GridCell
+
+from husky_rl.cell_table import CellTable, default_table_path
 
 from pathfinding.core.grid import Grid as PFGrid
 from pathfinding.finder.a_star import AStarFinder
@@ -76,14 +76,16 @@ class AStarNode(Node):
         self.declare_parameter('goal_topic',  '/rl_goal')
         self.declare_parameter('cell_topic',  '/agent_grid_cell')
         self.declare_parameter('path_topic',  '/rl_path')
-        # TODO: set cell_size_m to the measured lab value (metres per grid cell)
-        # to convert grid coordinates to physical coordinates for the controller.
-        self.declare_parameter('cell_size_m', 0.0)
+        self.declare_parameter('cell_table', '')
 
         goal_topic    = self.get_parameter('goal_topic').value
         cell_topic    = self.get_parameter('cell_topic').value
         path_topic    = self.get_parameter('path_topic').value
-        self._cell_size_m = float(self.get_parameter('cell_size_m').value)
+        table_path    = str(self.get_parameter('cell_table').value) or default_table_path()
+
+        # Every open cell must have a real position, or paths can't be converted.
+        self._table = CellTable.load(table_path)
+        self._table.check_against(OPEN_CELLS, GRID_WIDTH, GRID_HEIGHT)
 
         # Internal state
         self._current_cell: tuple[int, int] | None = None
@@ -107,16 +109,13 @@ class AStarNode(Node):
             GridCell, goal_topic, self._goal_cb, reliable_qos)
 
         self.path_pub = self.create_publisher(
-            Int32MultiArray, path_topic, reliable_qos)
+            Float64MultiArray, path_topic, reliable_qos)
 
-        scale_note = (f'cell_size_m={self._cell_size_m} m'
-                      if self._cell_size_m > 0
-                      else 'cell_size_m not set — publishing raw grid integers (TODO)')
         self.get_logger().info(
             f'A* node ready.\n'
             f'  sub: {goal_topic} | {cell_topic}\n'
-            f'  pub: {path_topic}\n'
-            f'  {scale_note}'
+            f'  pub: {path_topic} (metres, east/north)\n'
+            f'  cell table: {table_path}'
         )
 
     # ── Callbacks ─────────────────────────────────────────────────────────────
@@ -157,20 +156,14 @@ class AStarNode(Node):
                 f'A* found no path from {start} to {goal}.')
             return
 
-        # Flatten path to [x0,y0, x1,y1, ...] as raw grid integers.
-        # TODO: once cell_size_m is measured, coordinate scaling to metres
-        # requires switching to Float64MultiArray — coordinate with controller.
-        flat: list[int] = []
-        for node in path:
-            flat.append(node.x)
-            flat.append(node.y)
-
-        msg = Int32MultiArray()
-        msg.data = flat
+        # Cell path -> [e0,n0, e1,n1, ...] cell centres in metres.
+        cells = [(node.x, node.y) for node in path]
+        msg = Float64MultiArray()
+        msg.data = self._table.path_to_local(cells)
         self.path_pub.publish(msg)
 
         self.get_logger().info(
-            f'A* {start} -> {goal}: {len(path)} waypoints published.')
+            f'A* {start} -> {goal}: {len(path)} waypoints published: {cells}')
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -180,11 +173,12 @@ def main(args=None):
     node = AStarNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

@@ -1,4 +1,8 @@
-"""Pure world-to-grid coordinate conversion for the RL pipeline."""
+"""Pure world-to-grid coordinate conversion for the RL pipeline.
+
+NOTE: no longer used by any node.  The discretizer and A* node now use the
+'86 Field GPS cell table (husky_rl/cell_table.py).  Kept for reference.
+"""
 
 from dataclasses import dataclass
 import math

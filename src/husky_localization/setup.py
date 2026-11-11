@@ -26,7 +26,9 @@ setup(
         'console_scripts': [
             'uwb_pub = husky_localization.uwb_pub:main',
             'ekf = husky_localization.ekf:main',
-            'ekf_new = husky_localization.ekf_new:main'
+            'ekf_new = husky_localization.ekf_new:main',
+            'gps_pose = husky_localization.gps_pose:main',
+            'sim_gps = husky_localization.sim_gps:main',
         ],
     },
 )
