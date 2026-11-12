@@ -125,13 +125,13 @@ def test_skipped_cell_is_reported(table):
 
 
 def test_closest_non_adjacent_pair_no_flicker(table):
-    """(7,8) and (6,9) are only ~4.7 m apart but not neighbours on the grid."""
-    a, b = table.center((7, 8)), table.center((6, 9))
-    assert math.hypot(b[0] - a[0], b[1] - a[1]) < 5.0
+    """(12,5) and (13,6) are only ~5.4 m apart but not neighbours on the grid."""
+    a, b = table.center((12, 5)), table.center((13, 6))
+    assert math.hypot(b[0] - a[0], b[1] - a[1]) < 6.0
     tracker = CellTracker(table, reached_radius_m=1.5)
     cells = [tracker.update(*p).cell for p in _walk(a, b)]
     changes = sum(1 for x, y in zip(cells, cells[1:]) if x != y)
-    assert cells[0] == (7, 8) and cells[-1] == (6, 9) and changes == 1
+    assert cells[0] == (12, 5) and cells[-1] == (13, 6) and changes == 1
 
 
 def test_non_finite_position_ignored(table):
