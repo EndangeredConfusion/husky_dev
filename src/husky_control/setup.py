@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'point_controller = husky_control.point_controller:main',
+            'odom_to_ekf = husky_control.odom_to_ekf:main',
         ],
     },
 )
