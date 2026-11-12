@@ -29,7 +29,7 @@ W, H = _c["GRID_WIDTH"], _c["GRID_HEIGHT"]
 # ---- measured placemarks --------------------------------------------------
 PTS = {
     "Star_1": (42.730705, -73.680592), "Star_2": (42.730527, -73.679088),
-    "Star_3": (42.730140, -73.680727), "Star_4": (42.729932, -73.679259),
+    "Star_3": (42.730050, -73.680733), "Star_4": (42.729932, -73.679259),
     "A": (42.730682, -73.680334), "B": (42.730575, -73.679384),
     "E": (42.729967, -73.680030), "F": (42.729919, -73.679610),
 }
@@ -46,12 +46,19 @@ enu = lambda p: np.array([(p[1] - LON0) * KX, (p[0] - LAT0) * KY])
 gps = lambda e: (LAT0 + e[1] / KY, LON0 + e[0] / KX)
 P = {k: enu(v) for k, v in PTS.items()}
 
+# Original placemarks, as on the v1 overlay and in the screenshot. The v1 label
+# lookup (old()) and the overlay pixel fit stay on these, so turn spots and
+# J1-J3 picked off the v1 overlay do not drift when a goal pin moves.
+# Star_3 (goal 2) moved 2026-11-12: 42 43'48.18"N 73 40'50.64"W, ground 70.45 m.
+PTS_V1 = dict(PTS, Star_3=(42.730140, -73.680727))
+P1 = {k: enu(v) for k, v in PTS_V1.items()}
+
 
 # ---- v1 ("old") overlay grid, used only to look up label positions --------
 def _bilinear(gx, gy):
     u, v = (gx - 1) / 14, (gy - 1) / 8
-    return ((1 - u) * (1 - v) * P["Star_1"] + u * (1 - v) * P["Star_2"]
-            + (1 - u) * v * P["Star_3"] + u * v * P["Star_4"])
+    return ((1 - u) * (1 - v) * P1["Star_1"] + u * (1 - v) * P1["Star_2"]
+            + (1 - u) * v * P1["Star_3"] + u * v * P1["Star_4"])
 
 
 def _inv(p):
@@ -65,8 +72,8 @@ def _inv(p):
 
 
 def _curve(names):
-    xs = [1.0] + [_inv(P[n])[0] for n in names[1:-1]] + [15.0]
-    pts = [P[n] for n in names]
+    xs = [1.0] + [_inv(P1[n])[0] for n in names[1:-1]] + [15.0]
+    pts = [P1[n] for n in names]
 
     def at(gx):
         for i in range(len(xs) - 1):
@@ -209,10 +216,14 @@ with open("field86_cells.yaml", "w") as f:
 
 # ---- overlay --------------------------------------------------------------
 names = list(PIX)
-A_ = np.array([[*P[n], 1.0] for n in names])
+A_ = np.array([[*P1[n], 1.0] for n in names])
 M, *_ = np.linalg.lstsq(A_, np.array([PIX[n] for n in names], float), rcond=None)
 px = lambda e: tuple(np.array([*e, 1.0]) @ M)
 
+import os
+if not os.path.exists("screenshot.jpg"):
+    print("screenshot.jpg not found; skipped overlay_v3.png")
+    sys.exit(0)
 img = Image.open("screenshot.jpg").convert("RGB")
 d = ImageDraw.Draw(img, "RGBA")
 font = ImageFont.load_default()
