@@ -1,3 +1,6 @@
+import os
+from glob import glob
+
 from setuptools import find_packages, setup
 
 package_name = 'husky_localization'
@@ -10,6 +13,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -29,6 +33,7 @@ setup(
             'ekf_new = husky_localization.ekf_new:main',
             'gps_pose = husky_localization.gps_pose:main',
             'sim_gps = husky_localization.sim_gps:main',
+            'x20d_nmea_reader = husky_localization.x20d_nmea_reader:main',
         ],
     },
 )

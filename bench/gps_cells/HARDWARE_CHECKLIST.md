@@ -1,15 +1,20 @@
 # GPS cell-table pipeline: hardware checklist
 
-Checks for bringing the '86 Field GPS pipeline (branch `gps-cell-table`) onto
+Checks for bringing the '86 Field GPS pipeline (merged into `main`) onto
 the real Husky. **Part 1** can be done indoors (no satellite fix needed).
 **Part 2** needs open sky on the field.
 
 Setup assumed (from [bench/gps_navfn](../gps_navfn/README.md)):
 
-- u-blox receiver on USB to the **Jetson** (`192.168.131.5`), driver
-  `nmea_navsat_driver`, started by `bench/gps_navfn/start_gps.sh`.
-- Output `/gps/fix` (`sensor_msgs/NavSatFix`, frame `gps_link`) and, if the
-  receiver sends NMEA HDT, `/heading` (`geometry_msgs/QuaternionStamped`).
+- u-blox ZED-X20D on USB to the **Jetson** (`192.168.131.5`), started with
+  `ros2 launch husky_localization gps_x20d.launch.py`:
+  - `x20d_nmea_reader` owns the serial port, skips the binary UBX data, and
+    publishes `/heading` (`geometry_msgs/QuaternionStamped`) from the NMEA
+    **THS** sentence (the X20D heading firmware sends THS, not HDT);
+  - `nmea_navsat_driver`'s `nmea_topic_driver` turns GGA into `/gps/fix`
+    (`sensor_msgs/NavSatFix`, frame `gps_link`), the same parser as the bench.
+- Do **not** also run `bench/gps_navfn/start_gps.sh`: only one program can
+  own the serial port, and that driver cannot read the X20D heading.
 - Robot network on **ROS domain 0**; Husky host `cpr-a200-0679`.
 
 Every terminal below: `source /opt/ros/jazzy/setup.bash`, the workspace's
@@ -22,14 +27,16 @@ Write every measured value in [Results](#results) at the end.
 ## Part 1: Indoor checks (no fix needed)
 
 ### I1. Software on the robot computers
-- [ ] Branch `gps-cell-table` is checked out and built on the computer that
-      runs the RL pipeline (and on the Jetson if nodes run there):
+- [ ] The GPS driver package is installed on the Jetson (it also installs
+      `nmea_msgs`): `sudo apt-get install ros-jazzy-nmea-navsat-driver`
+- [ ] Latest `main` is pulled and built on the computer that runs the RL
+      pipeline and on the Jetson:
       `colcon build --symlink-install --packages-select husky_interfaces husky_control husky_localization husky_rl`
       (if colcon fails with `option --uninstall not recognized`, prefix with
       `PYTHONNOUSERSITE=1`).
 - [ ] Unit tests pass:
       `cd src/husky_rl && PYTHONPATH=$PWD python3 -m pytest -q test` (52 passed)
-      `cd src/husky_localization && PYTHONPATH=$PWD python3 -m pytest -q test/test_gps_pose_math.py` (14 passed)
+      `cd src/husky_localization && PYTHONPATH=$PWD python3 -m pytest -q test/test_gps_pose_math.py test/test_nmea_stream.py` (29 passed)
 - [ ] `stable_baselines3` and `pathfinding` import on that computer
       (`python3 -c "import stable_baselines3, pathfinding"`).
 
@@ -41,16 +48,24 @@ Write every measured value in [Results](#results) at the end.
       ANT2 = heading (secondary) antenna. Note which physical antenna is which.
 
 ### I3. Receiver output configuration (u-center 2)
-`nmea_navsat_driver` reads **only NMEA**: GGA (position, fix quality) and
-**HDT** (heading). It ignores UBX-NAV-DAHEADING.
+The pipeline reads **NMEA** only: GGA (position, fix quality) and **THS**
+(dual-antenna heading; replaces HDT on the X20D heading firmware). Binary UBX
+output may stay on; the reader skips it.
 - [ ] NMEA **GGA** enabled on the USB port.
-- [ ] NMEA **HDT** enabled on the USB port (otherwise `/heading` never appears).
+- [ ] NMEA **THS** enabled on the USB port (otherwise `/heading` never appears;
+      the reader then warns `no THS sentences`).
 - [ ] Output rate 5–10 Hz.
 - [ ] Configuration saved to the receiver's flash (survives power-off).
 
 ### I4. Driver and topics
-- [ ] On the Jetson: `bash ~/husky_ws/bench/gps_navfn/start_gps.sh` runs
-      without "Missing access" / "Serial port already in use".
+- [ ] On the Jetson, give your user access to the port if needed (see
+      [bench/gps_navfn](../gps_navfn/README.md)), then
+      `ros2 launch husky_localization gps_x20d.launch.py`
+      (add `port:=...` / `baud:=...` if they differ). It starts without a
+      serial error.
+- [ ] Every 10 s the reader logs `last 10 s: N sentences, M THS, ...` with
+      N > 0 and M > 0. Indoors the THS mode is usually `'V'` (no heading yet),
+      so `0 headings published` is expected here.
 - [ ] On the pipeline computer: `ros2 topic hz /gps/fix` shows the configured
       rate (5–10 Hz).
 - [ ] `ros2 topic echo /gps/fix --once`: frame `gps_link`; indoors expect
@@ -70,8 +85,9 @@ Robot frame: origin = robot centre (`base_link`), **x forward, y left**.
 - [ ] ANT1 position: `antenna_offset_x_m = ______`, `antenna_offset_y_m = ______`
 - [ ] Baseline ANT1 → ANT2: length `______ m`, direction relative to the
       robot's forward axis `______ deg` (0 = ANT2 straight ahead of ANT1,
-      positive = to the left). This is the starting guess for
-      `heading_offset_rad`; Part 2 confirms it.
+      positive = to the left). Starting guess:
+      `heading_offset_rad` = **minus** that angle in radians (ANT2 30° to the
+      left → the GPS reads 30° too small → −0.524). Part 2 confirms it.
 - [ ] Antennas are rigidly mounted, with a clear view of the sky, and the
       baseline/ground plane follow the u-blox ZED-X20D integration manual.
 
@@ -108,7 +124,7 @@ Robot frame: origin = robot centre (`base_link`), **x forward, y left**.
 | J2 | (4,3) | 42.7305366 | -73.6804124 | 14.68 | -18.74 |
 | J1 | (1,5) | 42.7302812 | -73.6806933 | -8.28 | -47.17 |
 | J3 | (12,6) | 42.7300832 | -73.6794345 | 94.65 | -69.21 |
-| Star_3 | (1,9) | 42.730140 | -73.680727 | -11.04 | -62.90 |
+| Star_3 | (1,9) | 42.730050 | -73.680733 | -11.53 | -72.91 |
 | E | (7,9) | 42.729967 | -73.680030 | 45.95 | -82.15 |
 | F | (10,9) | 42.729919 | -73.679610 | 80.30 | -87.50 |
 | Star_4 | (15,9) | 42.729932 | -73.679259 | 109.00 | -86.05 |
@@ -211,7 +227,7 @@ ros2 launch husky_rl rl.launch.py use_gps_pose:=true cmd_vel_topic:=<I5 topic> f
 | Item | Value |
 |---|---|
 | Receiver model / firmware (I2) | |
-| NMEA GGA + HDT enabled, rate (I3) | |
+| NMEA GGA + THS enabled, rate (I3) | |
 | `/gps/fix` rate (I4) | |
 | `cmd_vel_topic`, stamped? (I5) | |
 | `antenna_offset_x_m`, `antenna_offset_y_m` (I6) | |
