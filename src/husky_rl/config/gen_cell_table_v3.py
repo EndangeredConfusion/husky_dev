@@ -1,6 +1,6 @@
 """'86 Field: training grid cell -> GPS table, matched fork to fork; cells evenly spaced along each walk.
 
-Anchors (junctions/turns) are pinned to real spots chosen by Peter, given
+Anchors (junctions/turns) are pinned to real spots chosen, given
 either as measured placemarks or as labels on the v1 overlay ("old" grid).
 Every other open cell is spaced evenly along its lane between two anchors.
 Topology and cell order of the training grid are unchanged.
