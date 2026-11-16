@@ -6,7 +6,7 @@ log/
 **/*.pyc
 
 .DS_Store
-.vscode/.ropeproject
+.vscode
 
 # Transformer deployment artifacts stay outside the source repository.
 transformer_deployment/
