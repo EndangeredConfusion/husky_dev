@@ -1,0 +1,54 @@
+serial_number: a200-0000
+version: 0
+system:
+  hosts:
+    - hostname: a200-0000
+      ip: 127.0.0.1
+  ros2:
+    namespace: a200_0000
+    workspaces:
+      - /home/suzukh/clearpath_ws/install/setup.bash
+      - /home/suzukh/husky_dev/install/setup.bash
+platform:
+  enable_ekf: true
+  controller: ps4
+  attachments:
+    - name: front_bumper
+      type: a200.bumper
+      model: default
+      parent: front_bumper_mount
+    - name: rear_bumper
+      type: a200.bumper
+      model: default
+      parent: rear_bumper_mount
+    - name: top_plate
+      type: a200.top_plate
+      model: default
+      parent: default_mount
+  extras:
+    # RPLidar S2E + ZED-X20D GNSS antennas (not Clearpath-supported, so they live in husky_description)
+    urdf:
+      package: husky_description
+      path: urdf/husky_extras.urdf.xacro
+sensors:
+  imu:
+    - model: phidgets_spatial
+      urdf_enabled: true
+      launch_enabled: true
+      parent: base_link
+      xyz: [0.059, 0.0, 0.161275]
+      rpy: [0.0, 0.0, 0.0]
+      ros_parameters:
+        phidgets_spatial:
+          data_interval_ms: 20
+  camera:
+    # ZED 2i on the cross bar, facing forward. Height is a placeholder: measure it.
+    - model: stereolabs_zed
+      urdf_enabled: true
+      launch_enabled: false   # sim: skips the ZED driver (needs ZED SDK + CUDA). Set true on the real robot.
+      parent: default_mount
+      xyz: [0.05, 0.0, 0.20]
+      rpy: [0.0, 0.0, 0.0]
+      ros_parameters:
+        stereolabs_zed:
+          general.camera_model: 'zed2i'

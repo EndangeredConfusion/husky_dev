@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+<!--
+  Simulated Stereolabs ZED 2i (2.1 mm lens) as a Gazebo RGB-D camera. Sim only:
+  on the real robot the <gazebo> block is ignored and the ZED driver publishes the images.
+  Clearpath's stereolabs_zed entry in robot.yaml draws the camera body; this adds no visual.
+  2.1 mm lens: 110 deg horizontal FOV, depth 0.3-20 m.
+  Topics (prefix = topic arg): <topic>/image, <topic>/depth_image, <topic>/points, <topic>/camera_info
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="zed2i_sim" params="name parent topic *origin
+                                        width:=640 height:=360 rate:=15 hfov_deg:=110 near:=0.3 far:=20.0">
+    <joint name="${name}_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${name}_link"/>
+      <xacro:insert_block name="origin"/>
+    </joint>
+    <link name="${name}_link"/>
+
+    <!-- ROS optical frame convention: z forward, x right, y down -->
+    <joint name="${name}_optical_joint" type="fixed">
+      <parent link="${name}_link"/>
+      <child link="${name}_optical_frame"/>
+      <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+    </joint>
+    <link name="${name}_optical_frame"/>
+
+    <gazebo reference="${name}_link">
+      <sensor name="${name}" type="rgbd_camera">
+        <always_on>true</always_on>
+        <visualize>false</visualize>
+        <update_rate>${rate}</update_rate>
+        <topic>${topic}</topic>
+        <gz_frame_id>${name}_optical_frame</gz_frame_id>
+        <camera>
+          <horizontal_fov>${hfov_deg * pi / 180.0}</horizontal_fov>
+          <image>
+            <width>${width}</width>
+            <height>${height}</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.05</near>
+            <far>${far}</far>
+          </clip>
+          <depth_camera>
+            <clip>
+              <near>${near}</near>
+              <far>${far}</far>
+            </clip>
+          </depth_camera>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.007</stddev>
+          </noise>
+        </camera>
+      </sensor>
+    </gazebo>
+  </xacro:macro>
+</robot>

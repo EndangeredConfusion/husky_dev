@@ -1,0 +1,8 @@
+# Surface map of rpi_86_field: white = pavement, black = grass. World/odom frame, origin = KML point 1.
+image: rpi_86_field_surface.png
+mode: trinary
+resolution: 0.05
+origin: [-40.0, -110.0, 0.0]
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.25
