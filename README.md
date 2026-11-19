@@ -74,7 +74,7 @@ Files: `husky_bringup/worlds/rpi_86_field.sdf` (world), `husky_bringup/maps/rpi_
 cd ~/husky_dev && colcon build --symlink-install && source install/setup.bash
 ros2 launch husky_bringup sim.launch.py                         # Gazebo + Husky + sensor bridge + Nav2 + RViz
 ros2 launch husky_bringup sim.launch.py world:=warehouse        # a stock Clearpath world
-ros2 launch husky_bringup sim.launch.py rviz:=false nav2_delay:=40.0
+ros2 launch husky_bringup sim.launch.py use_rviz:=false nav2_delay:=40.0
 ```
 
 The robot spawns at point 1 (grid cell 1,1) facing east. Positions are in the `odom` frame

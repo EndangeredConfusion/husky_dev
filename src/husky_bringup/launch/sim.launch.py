@@ -3,7 +3,7 @@
 Worlds are found in husky_bringup/worlds/ first, then Clearpath's own worlds.
 
     ros2 launch husky_bringup sim.launch.py
-    ros2 launch husky_bringup sim.launch.py world:=warehouse rviz:=false
+    ros2 launch husky_bringup sim.launch.py world:=warehouse use_rviz:=false
 """
 import os
 
@@ -20,7 +20,7 @@ def generate_launch_description():
     world = LaunchConfiguration('world')
     namespace = LaunchConfiguration('namespace')
     setup_path = LaunchConfiguration('setup_path')
-    rviz = LaunchConfiguration('rviz')
+    rviz = LaunchConfiguration('use_rviz')  # not 'rviz': Clearpath's spawn sets that one to false
     nav2_delay = LaunchConfiguration('nav2_delay')
 
     def clearpath(pkg, launch_file):
@@ -69,7 +69,7 @@ def generate_launch_description():
         DeclareLaunchArgument('world', default_value='rpi_86_field'),
         DeclareLaunchArgument('namespace', default_value='a200_0000', description='Must match robot.yaml'),
         DeclareLaunchArgument('setup_path', default_value=os.path.expanduser('~/clearpath/')),
-        DeclareLaunchArgument('rviz', default_value='true'),
+        DeclareLaunchArgument('use_rviz', default_value='true'),
         DeclareLaunchArgument('nav2_delay', default_value='20.0', description='Seconds to wait before starting Nav2'),
         worlds_path, gz, spawn, bridge, nav2, rviz_node,
     ])
