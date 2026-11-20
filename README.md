@@ -1,103 +1,43 @@
-## Transformer interface (Jetson, stages 0–1 and 3–4)
+# Husky + Jetson policy integration
 
-The isolated ROS/GPU interface is in `src/husky_transformer_bridge` and
-`src/husky_transformer_policy`. See [deployment and tests](docs/transformer/README.md)
-and the [input contract](docs/transformer/CONTRACT.txt).
-It does not subscribe to live odometry or issue navigation/velocity commands yet.
-Transactional history and a paced, isolated ROS/GPU recorded replay are available.
-Live state adaptation and calibration remain outstanding.
-Weights, the GPU environment and runtime logs stay in `~/transformer_deployment`.
+ROS 2 Jazzy workspace for GPS localization, DQN/Transformer goal selection and path
+planning. The Transformer runs on Jetson GPU using BF16.
 
-See the [GPS reception and NavFn/A* bench](bench/gps_navfn/README.md) for setup, rerun commands and recorded results.
+**Robot controllers remain disabled by default (`enable_controller=false`).**
+The validated execution loop runs only in an isolated Gazebo environment.
 
-The sections below describe the earlier robot/DQN setup; their launch and velocity
-examples are not the Transformer smoke-test procedure or the current upgraded
-robot's velocity interface.
+## Current status
 
-robot: a200-balto
+- GPS → valid grid observation → Transformer → candidate goal → A* metric path:
+  bench-tested. Select `policy:=dqn` or `policy:=transformer` in the RL launch files.
+- Gazebo execution → macro feedback → Transformer history: validated for six
+  consecutive decisions (30 primitive steps), including nonzero rewards.
+- Duplicate/stale feedback, lost commit acknowledgments, localization dropout,
+  worker loss and coordinator loss have dedicated checks.
+- Full Husky simulation, physical map calibration and hardware execution remain
+  follow-up work. MPPI is TODO. Three existing map/tracker test failures are recorded
+  in the candidate bench results.
 
+## Run and validate
 
-(mdns is set up such that)
+| Task | Instructions and results |
+|---|---|
+| GPS reception and NavFn/A* bench | [GPS/planning guide](bench/gps_navfn/README.md) |
+| Transformer candidates, controller off | [Candidate guide](bench/transformer_candidates/README.md) · [Results](bench/transformer_candidates/RESULTS.md) |
+| Gazebo execution and history updates | [Simulation guide](bench/transformer_execution/README.md) · [Results](bench/transformer_execution/RESULTS.md) |
+| Model setup and recorded replay | [Deployment](docs/transformer/README.md) · [Input contract](docs/transformer/CONTRACT.txt) |
 
+Weights and the GPU Python environment live in `~/transformer_deployment`, outside
+Git. Follow the guides for build order, environment setup and isolated ROS domains.
+The simulation runner uses Gazebo's differential-drive example, not the full Husky
+model; its results do not establish collision avoidance or field readiness.
 
-`ssh <username>@a200-balto.local`
-works while on the OARBOT networks.
+## Gazebo handoff
 
+Execution topics are under `/transformer_sim/`: `odom`, `cmd_vel`, `state`, `command`,
+`feedback`, `heartbeat` and `audit`. Adapt the full Husky model to these interfaces,
+verify the field86 coordinate mapping, and retain the execution/history checks.
+One policy decision holds a goal for up to **five primitive steps**, including turns;
+reaching the end of a path is not automatically a completed macro action.
 
-the UWB configured
-`lrwxrwxrwx 1 root root 13 Apr  2 18:32 usb-SEGGER_J-Link_000760168714-if00 -> ../../ttyACM0`
-
-map of lab:
-<img width="509" height="509" alt="image" src="https://github.com/user-attachments/assets/5dfee510-45ea-4d4c-993d-df247aa27079" />
-
-Anchor positions can be configured via:
-`~/config/uwb_locations.yaml`
-The anchor ID is whatever the anchor thinks it is. If an anchor is publishing that is not in this map wherever the anchor thinks it is (what it's firmware was configured to) will be used instead. This may be very wrong as many of the anchors are set to some pretty random locations.
-
-
-publish twist:
-`ros2 topic pub /a200_1201/cmd_vel geometry_msgs/msg/Twist "{linear: {x: .1, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}" -r 20`
-
-start ekf:
-`ros2 run husky_localization ekf`
-
-start uwb reader:
-`ros2 run husky_localization uwb_pub --ros-args -p uwb_port:=/dev/serial/by-id/usb-SEGGER_J-Link_000760168714-if00`
-
-
-## RL Pipeline
-
-Pipeline:
-```
-EKF -> Discretizer -> RL Policy -> A* -> Controller -> Motors
-                          ^
-                    Lambda Node
-```
-
-All RL-side nodes live in `src/husky_rl/`. Build order:
-```
-colcon build --packages-select husky_interfaces
-colcon build --packages-select husky_rl husky_control
-```
-
-**Launch (fixed lambda):**
-```
-ros2 launch husky_rl rl.launch.py adaptive:=false fixed_lambda:="[1,2,2,9]"
-```
-
-**Launch (adaptive lambda / Algo 2):**
-```
-ros2 launch husky_rl rl.launch.py adaptive:=true
-```
-
-This starts five nodes: `discretizer`, `lambda_node`, `rl_policy`, `astar_node`,
-and `point_controller`. The Discretizer deliberately publishes nothing while
-`cell_size_m` is left at its safe default of `0.0`.
-
-Before enabling the full pipeline, measure the grid geometry and launch with:
-```
-ros2 launch husky_rl rl.launch.py \
-  cell_size_m:=<metres_per_cell> \
-  origin_x_m:=<grid_origin_x> \
-  origin_y_m:=<grid_origin_y> \
-  invert_y_axis:=false
-```
-
-### Topics
-
-| Topic                | Type                             | Publisher        | Subscriber                         |
-| -------------------- | -------------------------------- | ---------------- | ---------------------------------- |
-| `/agent_grid_cell`   | `husky_interfaces/GridCell`      | Discretizer      | rl_policy, lambda_node, astar_node |
-| `/lambda_values`     | `std_msgs/Float32MultiArray`     | lambda_node      | rl_policy                          |
-| `/rl_goal`           | `husky_interfaces/GridCell`      | rl_policy        | astar_node                         |
-| `/rl_goal_index`     | `std_msgs/Int32`                 | rl_policy        | debug                              |
-| `/rl_path`           | `std_msgs/Int32MultiArray`       | astar_node       | point_controller                   |
-| `/a200_1201/cmd_vel` | `geometry_msgs/Twist`            | point_controller | motors                             |
-
-### TODO
-- **Grid calibration**: measure `cell_size_m` and the world-frame grid origin.
-  The Discretizer is implemented, but remains disabled until these values are
-  supplied. A* still publishes raw grid integers, so the controller is not yet
-  safe to run against physical coordinates.
-- Tune EKF
-- Review and finalize `point_controller.py` integration
+The previous UWB/DQN setup notes are preserved in [historical setup](docs/legacy_setup.md).

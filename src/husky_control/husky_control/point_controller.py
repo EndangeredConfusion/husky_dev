@@ -13,6 +13,8 @@ notes:
 '''
 
 import numpy as np
+import time
+import math
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
@@ -39,6 +41,7 @@ class PointController(Node):
         self.declare_parameter('k_cross', 1.0)
         self.declare_parameter('max_omega', 1.0)
         self.declare_parameter('goal_tolerance', 0.15)
+        self.declare_parameter('pose_timeout_s', 1.0)
 
         def p(name):
             return self.get_parameter(name).value
@@ -56,6 +59,11 @@ class PointController(Node):
             goal_tolerance=float(p('goal_tolerance')))
 
         self.state = None
+        self.pose_received_at = None
+        self.pose_stamp = None
+        self.pose_timeout_s = float(p('pose_timeout_s'))
+        if not math.isfinite(self.pose_timeout_s) or self.pose_timeout_s <= 0:
+            raise ValueError('pose_timeout_s must be positive and finite')
         self.localization_subscriber = self.create_subscription(
             EkfState, self.localization_topic, self.localization_callback, 10)
         self.points_subscriber = self.create_subscription(
@@ -71,8 +79,12 @@ class PointController(Node):
 
     def point_callback(self, msg: Float64MultiArray):
         ''' replaces the current path with the published waypoints '''
+        if not self.pose_fresh():
+            self.stop_path('path rejected: no fresh pose')
+            return
         data = np.asarray(msg.data, dtype=float)
-        if len(data) < 2 or len(data) % 2:
+        if len(data) < 2 or len(data) % 2 or not np.isfinite(data).all():
+            self.stop_path('invalid path')
             self.get_logger().error(
                 f'path needs an even number of values (x0,y0,x1,y1,...), got {len(data)}')
             return
@@ -88,15 +100,36 @@ class PointController(Node):
 
     def localization_callback(self, msg: EkfState):
         ''' updates internal state from the localization topic '''
-        self.state = (msg.position_m.x, msg.position_m.y, msg.theta_rad)
+        state = (msg.position_m.x, msg.position_m.y, msg.theta_rad)
+        stamp = msg.timestamp.sec + msg.timestamp.nanosec * 1e-9
+        age = self.get_clock().now().nanoseconds * 1e-9 - stamp
+        if not all(math.isfinite(value) for value in state) or not 0 <= age <= self.pose_timeout_s:
+            self.state = None
+            self.pose_received_at = None
+            self.stop_path('invalid pose')
+            return
+        self.state = state
+        self.pose_stamp = stamp
+        self.pose_received_at = time.monotonic()
+
+    def pose_fresh(self):
+        return (self.state is not None and self.pose_received_at is not None
+                and self.pose_stamp is not None
+                and time.monotonic() - self.pose_received_at <= self.pose_timeout_s
+                and 0 <= self.get_clock().now().nanoseconds * 1e-9 - self.pose_stamp <= self.pose_timeout_s)
+
+    def stop_path(self, reason):
+        was_active = self.follower.active
+        self.follower.clear()
+        if was_active:
+            self.publish_cmd(0.0, 0.0)
+            self.get_logger().warning(reason + '; stopped, a new path is required')
 
     def control_publish_callback(self):
         if not self.follower.active:
             return
-        if self.state is None:
-            self.get_logger().warn(
-                f'have a path but no pose on {self.localization_topic}',
-                throttle_duration_sec=2.0)
+        if not self.pose_fresh():
+            self.stop_path('pose timed out')
             return
 
         v, omega, done = self.follower.step(*self.state)
