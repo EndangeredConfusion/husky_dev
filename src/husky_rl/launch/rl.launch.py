@@ -113,6 +113,7 @@ def generate_launch_description():
     )
 
     rl_policy_node = Node(
+        condition=IfCondition(PythonExpression(["'", LaunchConfiguration('policy'), "' == 'dqn'"])),
         package='husky_rl',
         executable='rl_policy',
         name='rl_policy_node',
@@ -123,7 +124,8 @@ def generate_launch_description():
         package='husky_rl',
         executable='astar_node',
         name='astar_node',
-        parameters=[{'cell_table': cell_table}],
+        parameters=[{'cell_table': cell_table, 'decision_mode': ParameterValue(
+            PythonExpression(["'", LaunchConfiguration('policy'), "' == 'transformer'"]), value_type=bool)}],
         output='screen',
     )
 
@@ -147,6 +149,7 @@ def generate_launch_description():
     )
 
     controller_node = Node(
+        condition=IfCondition(LaunchConfiguration('enable_controller')),
         package='husky_control',
         executable='point_controller',
         name='point_controller',
@@ -161,6 +164,12 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument('policy', default_value='dqn', choices=['dqn', 'transformer']),
+        DeclareLaunchArgument('enable_controller', default_value='false'),
+        DeclareLaunchArgument('socket_path', default_value='/tmp/husky_policy_candidates.sock'),
+        Node(package='husky_transformer_bridge', executable='transformer_policy',
+             condition=IfCondition(PythonExpression(["'", LaunchConfiguration('policy'), "' == 'transformer'"])),
+             parameters=[{'socket_path': LaunchConfiguration('socket_path')}], output='screen'),
         adaptive_arg,
         fixed_lambda_arg,
         cell_table_arg,

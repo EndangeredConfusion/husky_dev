@@ -11,6 +11,9 @@ agent is always at a cell centre.
 from __future__ import annotations
 
 import rclpy
+import json
+import time
+from std_msgs.msg import String
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
@@ -37,6 +40,11 @@ class DiscretizerNode(Node):
         self.declare_parameter('require_rtk', False)    # acccept only RTK fixes
         self.declare_parameter('max_horizontal_std_m', 0.0)     # reject fixes whose reported accuracy is worse than this
         self.declare_parameter('publish_only_on_change', True)
+        self.declare_parameter('fix_timeout_s', 2.0)
+        self._last_valid_fix = None
+        self._fix_valid = False
+        self._source_stamp = 0.0
+        self._state_seq = 0
         # Re-send the held cell so nodes that start late (rl_policy takes ~2 s to load the DQN) still get it while the robot stands still.
         # rl_policy only counts changes, so repeats do not affect it.
         self.declare_parameter('republish_period_s', 1.0)   # Re-send the held cell every second
@@ -73,6 +81,8 @@ class DiscretizerNode(Node):
             depth=10,
         )
         self._cell_publisher = self.create_publisher(GridCell, cell_topic, reliable_qos)
+        self._state_publisher = self.create_publisher(String, cell_topic + '/state', reliable_qos)
+        self.create_timer(0.1, self._publish_state)
         # sensor-data QoS (best effort) also matches reliable GPS publishers
         self._fix_subscription = self.create_subscription(
             NavSatFix, fix_topic, self._fix_callback, qos_profile_sensor_data)
@@ -89,6 +99,12 @@ class DiscretizerNode(Node):
             f'require_rtk={self._require_rtk}')
 
     def _fix_callback(self, msg: NavSatFix) -> None:
+        self._fix_valid = False
+        self._source_stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        age = self.get_clock().now().nanoseconds * 1e-9 - self._source_stamp
+        if not 0.0 <= age <= float(self.get_parameter('fix_timeout_s').value):
+            self._publish_state()
+            return
         ok, reason = fix_accepted(
             msg.status.status, msg.latitude, msg.longitude,
             require_rtk=self._require_rtk,
@@ -118,6 +134,11 @@ class DiscretizerNode(Node):
 
         if upd.cell is None:
             return
+        self._fix_valid = True
+        self._last_valid_fix = time.monotonic()
+        if upd.changed:
+            self._state_seq += 1
+        self._publish_state()
         if upd.changed:
             if upd.bootstrapped:
                 self.get_logger().info(
@@ -134,8 +155,18 @@ class DiscretizerNode(Node):
         self._publish(upd.cell)
 
     def _republish(self) -> None:
-        if self._tracker.cell is not None:
+        if self._fresh() and self._tracker.cell is not None:
             self._publish(self._tracker.cell)
+
+    def _fresh(self):
+        return (self._fix_valid and self._last_valid_fix is not None
+                and time.monotonic() - self._last_valid_fix <=
+                float(self.get_parameter('fix_timeout_s').value))
+
+    def _publish_state(self):
+        self._state_publisher.publish(String(data=json.dumps(dict(
+            valid=self._fresh(), cell=self._tracker.cell,
+            source_stamp=self._source_stamp, state_seq=self._state_seq))))
 
     def _publish(self, cell) -> None:
         cell_msg = GridCell()

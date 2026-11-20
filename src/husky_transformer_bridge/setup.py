@@ -8,4 +8,5 @@ setup(name=name, version='0.1.0', packages=find_packages(exclude=['test']),
       maintainer='alice', maintainer_email='xuyaoalice@gmail.com',
       description='Isolated Transformer policy interface for Husky',
       license='TODO: License declaration',
-      entry_points={'console_scripts': ['policy_bridge = husky_transformer_bridge.ros_bridge:main']})
+      entry_points={'console_scripts': ['policy_bridge = husky_transformer_bridge.ros_bridge:main',
+          'transformer_policy = husky_transformer_bridge.transformer_policy_node:main']})

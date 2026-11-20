@@ -1,6 +1,8 @@
 build/
 install/
 log/
+build_candidates/
+install_candidates/
 
 **/__pycache__/
 **/*.pyc

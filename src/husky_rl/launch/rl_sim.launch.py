@@ -30,6 +30,9 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     ns = LaunchConfiguration('robot_namespace')
     args = [
+        DeclareLaunchArgument('policy', default_value='dqn', choices=['dqn', 'transformer']),
+        DeclareLaunchArgument('enable_controller', default_value='false'),
+        DeclareLaunchArgument('socket_path', default_value='/tmp/husky_policy_candidates.sock'),
         DeclareLaunchArgument('robot_namespace', default_value='a200_1201',
                               description='Clearpath robot namespace in Gazebo'),
         DeclareLaunchArgument('pose_source', default_value='gazebo',
@@ -71,6 +74,9 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(PathJoinSubstitution(
             [FindPackageShare('husky_rl'), 'launch', 'rl.launch.py'])),
         launch_arguments={
+            'policy': LaunchConfiguration('policy'),
+            'enable_controller': LaunchConfiguration('enable_controller'),
+            'socket_path': LaunchConfiguration('socket_path'),
             'use_gps_pose': 'true',
             'cmd_vel_topic': ['/', ns, '/cmd_vel'],
             'adaptive': LaunchConfiguration('adaptive'),

@@ -17,12 +17,13 @@ itself still runs on the grid exactly as in training.
 from __future__ import annotations
 
 import numpy as np
+import json
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
-from std_msgs.msg import Float64MultiArray
+from std_msgs.msg import Float64MultiArray, String
 from husky_interfaces.msg import GridCell
 
 from husky_rl.cell_table import CellTable, default_table_path
@@ -77,6 +78,9 @@ class AStarNode(Node):
         self.declare_parameter('cell_topic',  '/agent_grid_cell')
         self.declare_parameter('path_topic',  '/rl_path')
         self.declare_parameter('cell_table', '')
+        self.declare_parameter('decision_mode', False)
+        self._decision_id = None
+        self._seen_decisions = set()
 
         goal_topic    = self.get_parameter('goal_topic').value
         cell_topic    = self.get_parameter('cell_topic').value
@@ -105,8 +109,13 @@ class AStarNode(Node):
 
         self.cell_sub = self.create_subscription(
             GridCell, cell_topic, self._cell_cb, sensor_qos)
-        self.goal_sub = self.create_subscription(
-            GridCell, goal_topic, self._goal_cb, reliable_qos)
+        if self.get_parameter('decision_mode').value:
+            self.goal_sub = self.create_subscription(
+                String, '/transformer/decision', self._decision_cb, reliable_qos)
+        else:
+            self.goal_sub = self.create_subscription(
+                GridCell, goal_topic, self._goal_cb, reliable_qos)
+        self.result_pub = self.create_publisher(String, '/planner/result', reliable_qos)
 
         self.path_pub = self.create_publisher(
             Float64MultiArray, path_topic, reliable_qos)
@@ -119,6 +128,33 @@ class AStarNode(Node):
         )
 
     # ── Callbacks ─────────────────────────────────────────────────────────────
+
+    def _decision_cb(self, msg):
+        self._decision_id = None
+        try:
+            d = json.loads(msg.data)
+            ident = d['decision_id']
+            if not isinstance(ident, str) or not ident:
+                raise ValueError('Missing decision ID')
+            if ident in self._seen_decisions:
+                return
+            self._decision_id = ident
+            start, goal = tuple(d['start']), tuple(d['goal'])
+            if any(type(v) is not int for v in start + goal):
+                raise ValueError('Cells must be integers')
+            age = self.get_clock().now().nanoseconds * 1e-9 - float(d['source_stamp'])
+            if not 0 <= age <= 2.0:
+                raise ValueError('Expired observation')
+            self._seen_decisions.add(ident)
+            if len(self._seen_decisions) > 4096:
+                self._seen_decisions = {ident}
+            self._run_and_publish(start, goal)
+        except (ValueError, TypeError, KeyError) as exc:
+            self._result('rejected', error=str(exc))
+
+    def _result(self, status, **extra):
+        self.result_pub.publish(String(data=json.dumps(dict(
+            decision_id=self._decision_id, status=status, **extra))))
 
     def _cell_cb(self, msg: GridCell):
         first_fix = self._current_cell is None
@@ -144,6 +180,9 @@ class AStarNode(Node):
     # ── A* + publish ──────────────────────────────────────────────────────────
 
     def _run_and_publish(self, start: tuple[int, int], goal: tuple[int, int]):
+        if start not in OPEN_CELLS or goal not in OPEN_CELLS:
+            self._result('rejected', error='Start or goal is not a walkable cell')
+            return
         grid = PFGrid(matrix=WALKABILITY_MATRIX.tolist())
         start_node = grid.node(start[0], start[1])
         goal_node  = grid.node(goal[0],  goal[1])
@@ -152,6 +191,7 @@ class AStarNode(Node):
         path, _ = finder.find_path(start_node, goal_node, grid)
 
         if not path:
+            self._result('no_path', start=start, goal=goal)
             self.get_logger().error(
                 f'A* found no path from {start} to {goal}.')
             return
@@ -161,6 +201,8 @@ class AStarNode(Node):
         msg = Float64MultiArray()
         msg.data = self._table.path_to_local(cells)
         self.path_pub.publish(msg)
+        self._result('planned', start=start, goal=goal, cells=cells,
+                     path_metres=list(msg.data), frame='field86_local_enu')
 
         self.get_logger().info(
             f'A* {start} -> {goal}: {len(path)} waypoints published: {cells}')
